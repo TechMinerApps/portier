@@ -7,8 +7,8 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// logger is used here to de-couple logging framework
-type logger interface {
+// Logger is used here to de-couple logging framework
+type Logger interface {
 	Debugf(template string, args ...interface{})
 	Infof(template string, args ...interface{})
 	Warnf(template string, args ...interface{})
@@ -29,33 +29,44 @@ const (
 	HUMAN
 )
 
-type Log struct {
-	Logger logger
+type log struct {
+	Logger Logger
 }
 
+// Config is used to config a logger
 type Config struct {
 	Mode       loggerType
 	OutputFile string
 }
 
 // NewLogger generates a new logger based on config
-func NewLogger(c *Config) (*Log, error) {
-	var l Log
+func NewLogger(c *Config) (Logger, error) {
+	var l log
 	switch c.Mode {
 	case MACHINE:
 		z, _ := zap.NewDevelopment()
 		l.Logger = z.Sugar()
 	case HUMAN:
+		var err error
+
+		// Write to stdout by default
 		writeSyncer := zapcore.AddSync(os.Stdout)
+
+		// Write to file if OutputFile is set
 		if c.OutputFile != "" {
-			writeSyncer, _ = getFileLogWriter(c.OutputFile)
+			writeSyncer, err = getFileLogWriter(c.OutputFile)
+			if err != nil {
+				return nil, err
+			}
 		}
+
+		// Custonmize zap logger
 		encoder := getEncoder()
 		core := zapcore.NewCore(encoder, writeSyncer, zapcore.DebugLevel)
 
 		l.Logger = zap.New(core, zap.AddCaller()).Sugar()
 	}
-	return &l, nil
+	return l.Logger, nil
 }
 
 func getEncoder() zapcore.Encoder {
