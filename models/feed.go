@@ -1,4 +1,4 @@
-package model
+package models
 
 // Feed is a RSS/Atom Feed
 type Feed struct {

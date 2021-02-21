@@ -2,12 +2,16 @@ package bot
 
 import "gopkg.in/tucnak/telebot.v2"
 
-type App struct {
+type Bot interface {
+	Start()
+	Stop()
+}
+type bot struct {
 	Bot *telebot.Bot
 }
 
-func NewTeleBot() (*App, error) {
-	var app App
+func NewBot() (Bot, error) {
+	var app bot
 	var err error
 	app.Bot, err = telebot.NewBot(telebot.Settings{})
 	if err != nil {
@@ -17,14 +21,14 @@ func NewTeleBot() (*App, error) {
 	return &app, nil
 }
 
-func (app *App) Start() {
-	app.Bot.Start()
+func (b *bot) Start() {
+	b.Bot.Start()
 }
 
-func (app *App) Stop() {
-	app.Bot.Stop()
+func (b *bot) Stop() {
+	b.Bot.Stop()
 }
 
-func (app *App) configCommands() {
-	app.Bot.Handle("/start", app.cmdStart)
+func (b *bot) configCommands() {
+	b.Bot.Handle("/start", b.cmdStart)
 }
