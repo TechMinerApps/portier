@@ -20,7 +20,13 @@ type poller struct {
 	parser      gofeed.Parser
 	db          *buntdb.DB
 	sourcePool  []*models.Source
+	workerPool  map[uint]worker
 	feedChannel chan<- *Feed
+}
+
+type worker struct {
+	ticker *time.Ticker
+	source models.Source
 }
 
 // Config is the configuration needed to create a Poller
@@ -42,16 +48,23 @@ func (p *poller) Start() error {
 
 func (p *poller) Stop() error {
 	// poller.Stop() does not take care of data persistence
+	for _, worker := range p.workerPool {
+		worker.ticker.Stop()
+	}
 	return nil
 }
 
 func (p *poller) worker(s *models.Source) {
 	// worker is a blocking function
+	// that create a create a worker object in p.workerPool
 	// make sure to call it in a new go routine
-	tickerChan := time.Tick(time.Duration(s.UpdateInterval))
+	ticker := time.NewTicker(time.Duration(s.UpdateInterval))
+	var w worker
+	w.ticker = ticker
+	p.workerPool[s.ID] = w
 	for {
-		go p.poll(s)
-		<-tickerChan
+		go p.poll(&w.source)
+		<-ticker.C
 	}
 
 }
@@ -59,29 +72,38 @@ func (p *poller) worker(s *models.Source) {
 func (p *poller) poll(s *models.Source) {
 	feed, err := p.parser.ParseURL(s.URL)
 	if err != nil {
+		// Error Handling needed
 		return
 	}
 	for _, item := range feed.Items {
+		hash := utils.StringHash(s.URL + "|" + item.GUID)
+
+		// Do a read transaction to check if feed exists
 		err = p.db.View(func(tx *buntdb.Tx) error {
-
-			hash := utils.StringHash(s.URL + "|" + item.GUID)
-
 			// Check if item exists in memory
 			_, ok := tx.Get(hash)
-			if ok == nil {
-				return nil
-			} else if ok != buntdb.ErrNotFound { // Report error
-				return ok
-			}
+			return ok
+		})
 
-			// Send item if new
-			p.feedChannel <- &Feed{
-				FeedID: hash,
-				Item:   item,
-			}
+		if err == nil {
+			// End if found without error
+			break
+		} else if err != buntdb.ErrNotFound {
+			// Report Error
+			break
+		}
 
-			// End Transaction
-			return nil
+		// Send item if new
+		feed := Feed{
+			FeedID: hash,
+			Item:   item,
+		}
+		p.feedChannel <- &feed
+
+		// Then store it in db
+		err = p.db.Update(func(tx *buntdb.Tx) error {
+			_, _, err := tx.Set(hash, "exists", nil)
+			return err
 		})
 	}
 }
@@ -89,5 +111,6 @@ func (p *poller) poll(s *models.Source) {
 // NewPoller creates a Poller according to the Config
 func NewPoller(c *Config) (Poller, error) {
 	var p poller
+	p.workerPool = make(map[uint]worker)
 	return &p, nil
 }
