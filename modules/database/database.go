@@ -38,7 +38,7 @@ type mysqlConfig struct {
 }
 
 // NewDBConnection returns a DB object based on config provided
-func NewDBConnection(c DBConfig) (*gorm.DB, error) {
+func NewDBConnection(c *DBConfig) (*gorm.DB, error) {
 
 	var err error
 	var DB *gorm.DB

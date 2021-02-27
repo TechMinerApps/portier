@@ -4,7 +4,11 @@ go 1.15
 
 require (
 	github.com/go-sql-driver/mysql v1.5.0
+	github.com/mmcdole/gofeed v1.1.0
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/tidwall/btree v0.4.2 // indirect
+	github.com/tidwall/buntdb v1.2.0
+	github.com/tidwall/pretty v1.0.5 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.16.0
 	gopkg.in/tucnak/telebot.v2 v2.3.5

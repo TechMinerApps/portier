@@ -1,4 +1,4 @@
-package model
+package models
 
 // Content is a single passage crawled from feed
 type Content struct {
