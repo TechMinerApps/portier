@@ -13,3 +13,13 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+# Development config file
+config.yaml
+config.yml
+
+# VSCode Config
+.vscode/
+
+# Development Database
+dev.db

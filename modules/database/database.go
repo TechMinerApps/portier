@@ -22,8 +22,8 @@ const (
 // DBConfig is the config used to start a DB connection
 type DBConfig struct {
 	Type         DBType
-	SQLiteConfig sqliteConfig
-	MySQLConfig  mysqlConfig
+	SQLiteConfig sqliteConfig `mapstructure:",squash"`
+	MySQLConfig  mysqlConfig  `mapstructure:",squash"`
 }
 type sqliteConfig struct {
 	Path string
@@ -45,7 +45,8 @@ func NewDBConnection(c *DBConfig) (*gorm.DB, error) {
 
 	switch c.Type {
 	case SQLITE:
-		DB, err = gorm.Open(sqlite.Open(utils.AbsPath(c.SQLiteConfig.Path)), &gorm.Config{})
+		path := utils.AbsPath(c.SQLiteConfig.Path)
+		DB, err = gorm.Open(sqlite.Open(path), &gorm.Config{})
 	case MYSQL:
 		cfg := mysqldriver.NewConfig()
 		cfg.User = c.MySQLConfig.Username
