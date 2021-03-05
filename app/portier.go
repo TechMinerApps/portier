@@ -26,7 +26,8 @@ type Portier struct {
 }
 
 type Config struct {
-	DB database.DBConfig
+	DB       database.DBConfig
+	Telegram bot.Config
 }
 
 func NewPortier() *Portier {
@@ -110,7 +111,7 @@ func (p *Portier) setupViper() {
 
 func (p *Portier) setupBot() error {
 	var err error
-	p.bot, err = bot.NewBot()
+	p.bot, err = bot.NewBot(&p.config.Telegram, p.logger)
 	if err != nil {
 		return err
 	}
