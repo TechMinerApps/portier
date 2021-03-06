@@ -6,6 +6,7 @@ import (
 
 	"github.com/TechMinerApps/portier/modules/log"
 	"gopkg.in/tucnak/telebot.v2"
+	"gorm.io/gorm"
 )
 
 type Config struct {
@@ -18,10 +19,11 @@ type Bot interface {
 }
 type bot struct {
 	Bot    *telebot.Bot
+	db     *gorm.DB
 	logger log.Logger
 }
 
-func NewBot(c *Config, logger log.Logger) (Bot, error) {
+func NewBot(c *Config, logger log.Logger, db *gorm.DB) (Bot, error) {
 	var app bot
 	var err error
 	app.Bot, err = telebot.NewBot(telebot.Settings{
@@ -42,6 +44,7 @@ func NewBot(c *Config, logger log.Logger) (Bot, error) {
 
 	app.configCommands()
 	app.logger = logger
+	app.db = db
 	return &app, nil
 }
 
@@ -55,4 +58,5 @@ func (b *bot) Stop() {
 
 func (b *bot) configCommands() {
 	b.Bot.Handle("/start", b.cmdStart)
+	b.Bot.Handle("/sub", b.cmdSub)
 }
