@@ -14,11 +14,18 @@ type Config struct {
 }
 
 type Bot interface {
+
+	// Start is used to start the bot
 	Start()
+
+	// Stop stops the bot
 	Stop()
+
+	// Bot return the original telebot.Bot object
+	Bot() *telebot.Bot
 }
 type bot struct {
-	Bot    *telebot.Bot
+	bot    *telebot.Bot
 	db     *gorm.DB
 	logger log.Logger
 }
@@ -26,7 +33,7 @@ type bot struct {
 func NewBot(c *Config, logger log.Logger, db *gorm.DB) (Bot, error) {
 	var app bot
 	var err error
-	app.Bot, err = telebot.NewBot(telebot.Settings{
+	app.bot, err = telebot.NewBot(telebot.Settings{
 		URL:         "",
 		Token:       c.Token,
 		Updates:     0,
@@ -49,14 +56,17 @@ func NewBot(c *Config, logger log.Logger, db *gorm.DB) (Bot, error) {
 }
 
 func (b *bot) Start() {
-	b.Bot.Start()
+	b.bot.Start()
 }
 
 func (b *bot) Stop() {
-	b.Bot.Stop()
+	b.bot.Stop()
+}
+func (b *bot) Bot() *telebot.Bot {
+	return b.bot
 }
 
 func (b *bot) configCommands() {
-	b.Bot.Handle("/start", b.cmdStart)
-	b.Bot.Handle("/sub", b.cmdSub)
+	b.bot.Handle("/start", b.cmdStart)
+	b.bot.Handle("/sub", b.cmdSub)
 }

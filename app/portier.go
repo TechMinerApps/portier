@@ -18,6 +18,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// Portier is the main app
 type Portier struct {
 	db          *gorm.DB
 	memDB       *buntdb.DB
@@ -30,11 +31,14 @@ type Portier struct {
 	wg          sync.WaitGroup
 }
 
+// Config is the configuration used in viper
 type Config struct {
 	DB       database.DBConfig
 	Telegram bot.Config
 }
 
+// NewPortier create a new portier object
+// does not need config as parameter since this is the main object
 func NewPortier() *Portier {
 	var p Portier
 	p.setupLogger()
@@ -42,6 +46,7 @@ func NewPortier() *Portier {
 	p.setupDB(&p.config.DB)
 	p.setupBuntDB()
 	p.setupBot()
+	p.setupFeedComponent()
 
 	p.logger.Infof("Portier Setup Succeeded")
 	return &p
@@ -54,11 +59,20 @@ func (p *Portier) Start() {
 
 	// telebot.Bot.Start() is a blocking method, so start the bot in a goroutine
 	go p.bot.Start()
+	p.logger.Infof("Telegram Bot Started")
+
+	// Start poller
+	p.poller.Start()
+	p.logger.Infof("Feed poller started")
+
+	// Start Broadcaster
+	p.broadcaster.Start()
+	p.logger.Infof("Broadcaster started")
 
 	// Add waitgroup
 	p.wg.Add(1)
 
-	p.logger.Infof("Portier Started")
+	p.logger.Infof("Portier started")
 }
 
 func (p *Portier) Stop(sig ...os.Signal) {
@@ -102,7 +116,26 @@ func (p *Portier) setupBuntDB() error {
 	return nil
 }
 
-func (p *Portier) setupPoller() error {
+func (p *Portier) setupFeedComponent() error {
+	feedChan := make(chan *feed.Feed, 10) // hardcoded 10 buffer space
+	var sourcePool []*models.Source
+	p.db.Model(&models.Source{}).Find(&sourcePool)
+	pollerConfig := &feed.PollerConfig{
+		SourcePool:  sourcePool,
+		DB:          p.memDB,
+		FeedChannel: feedChan,
+		Logger:      p.logger,
+	}
+	p.poller, _ = feed.NewPoller(pollerConfig)
+	broadcasterConfig := &feed.BroadCastConfig{
+		DB:          p.db,
+		WorkerCount: 1,
+		FeedChannel: feedChan,
+		Bot:         p.bot.Bot(),
+		Logger:      p.logger,
+	}
+	p.broadcaster, _ = feed.NewBroadcaster(broadcasterConfig)
+
 	return nil
 }
 

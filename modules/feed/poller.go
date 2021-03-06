@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/TechMinerApps/portier/models"
+	"github.com/TechMinerApps/portier/modules/log"
 	"github.com/TechMinerApps/portier/utils"
 	"github.com/mmcdole/gofeed"
 	"github.com/tidwall/buntdb"
@@ -17,11 +18,12 @@ type Poller interface {
 }
 
 type poller struct {
-	parser      gofeed.Parser
+	parser      *gofeed.Parser
 	db          *buntdb.DB
 	sourcePool  []*models.Source
 	workerPool  map[uint]worker
 	feedChannel chan<- *Feed
+	logger      log.Logger
 }
 
 type worker struct {
@@ -29,11 +31,12 @@ type worker struct {
 	source models.Source
 }
 
-// Config is the configuration needed to create a Poller
-type Config struct {
+// PollerConfig is the configuration needed to create a Poller
+type PollerConfig struct {
 	SourcePool  []*models.Source
 	DB          *buntdb.DB
 	FeedChannel chan<- *Feed
+	Logger      log.Logger
 }
 
 func (p *poller) Start() error {
@@ -42,6 +45,7 @@ func (p *poller) Start() error {
 	// Start worker goroutine
 	for _, s := range p.sourcePool {
 		go p.worker(s)
+		p.logger.Infof("Started poller for %s", s.Title)
 	}
 	return nil
 }
@@ -59,11 +63,13 @@ func (p *poller) worker(s *models.Source) {
 	// worker is a blocking function
 	// that create a create a worker object in p.workerPool
 	// make sure to call it in a new go routine
-	ticker := time.NewTicker(time.Duration(s.UpdateInterval))
+	ticker := time.NewTicker(time.Duration(s.UpdateInterval * uint(time.Second)))
 	var w worker
 	w.ticker = ticker
+	w.source = *s
 	p.workerPool[s.ID] = w
 	for {
+		p.logger.Infof("Polling source %s", w.source.Title)
 		go p.poll(&w.source)
 		<-ticker.C
 	}
@@ -73,7 +79,7 @@ func (p *poller) worker(s *models.Source) {
 func (p *poller) poll(s *models.Source) {
 	feed, err := p.parser.ParseURL(s.URL)
 	if err != nil {
-		// Error Handling needed
+		p.logger.Warnf("Polling feed %s error: %s", s.Title, err.Error())
 		return
 	}
 	for _, item := range feed.Items {
@@ -100,6 +106,7 @@ func (p *poller) poll(s *models.Source) {
 			FeedID:   hash,
 			Item:     item,
 		}
+		p.logger.Infof("Sending feed item from %s to broadcaster", s.Title)
 		p.feedChannel <- &feed
 
 		// Then store it in db
@@ -111,8 +118,13 @@ func (p *poller) poll(s *models.Source) {
 }
 
 // NewPoller creates a Poller according to the Config
-func NewPoller(c *Config) (Poller, error) {
+func NewPoller(c *PollerConfig) (Poller, error) {
 	var p poller
 	p.workerPool = make(map[uint]worker)
+	p.db = c.DB
+	p.feedChannel = c.FeedChannel
+	p.logger = c.Logger
+	p.sourcePool = c.SourcePool
+	p.parser = gofeed.NewParser()
 	return &p, nil
 }
