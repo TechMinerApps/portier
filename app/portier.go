@@ -45,7 +45,6 @@ func NewPortier() *Portier {
 	p.setupViper()
 	p.setupDB(&p.config.DB)
 	p.setupBuntDB()
-	p.setupBot()
 	p.setupFeedComponent()
 
 	p.logger.Infof("Portier Setup Succeeded")
@@ -127,6 +126,7 @@ func (p *Portier) setupFeedComponent() error {
 		Logger:      p.logger,
 	}
 	p.poller, _ = feed.NewPoller(pollerConfig)
+	p.setupBot()
 	broadcasterConfig := &feed.BroadCastConfig{
 		DB:          p.db,
 		WorkerCount: 1,
@@ -170,7 +170,7 @@ func (p *Portier) setupViper() {
 
 func (p *Portier) setupBot() error {
 	var err error
-	p.bot, err = bot.NewBot(&p.config.Telegram, p.logger, p.db)
+	p.bot, err = bot.NewBot(&p.config.Telegram, p.logger, p.db, p.poller)
 	if err != nil {
 		return err
 	}

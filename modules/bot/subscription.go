@@ -11,6 +11,7 @@ import (
 func (b *bot) cmdSub(m *telebot.Message) {
 	var source models.Source
 	source.URL, _ = GetURLAndMentionFromMessage(m)
+	source.Title, _ = b.poller.FetchTitle(source.URL)
 	source.UpdateInterval = 300 // hardcoded for now
 	var user models.User
 	if err := b.db.Model(&user).Association("Sources").Error; err != nil {
@@ -30,6 +31,8 @@ func (b *bot) cmdSub(m *telebot.Message) {
 	}
 	b.db.Model(&source).Where("url = ?", source.URL).First(&source)
 	b.db.Model(&user).Association("Sources").Append(&source)
-	b.Bot().Send(m.Chat, "Success")
+
+	b.poller.AddSource(&source)
+	b.Bot().Send(m.Chat, "Add Feed \""+source.Title+"\" Success")
 
 }

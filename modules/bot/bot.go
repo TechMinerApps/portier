@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/TechMinerApps/portier/modules/feed"
 	"github.com/TechMinerApps/portier/modules/log"
 	"gopkg.in/tucnak/telebot.v2"
 	"gorm.io/gorm"
@@ -25,12 +26,13 @@ type Bot interface {
 	Bot() *telebot.Bot
 }
 type bot struct {
+	poller feed.Poller
 	bot    *telebot.Bot
 	db     *gorm.DB
 	logger log.Logger
 }
 
-func NewBot(c *Config, logger log.Logger, db *gorm.DB) (Bot, error) {
+func NewBot(c *Config, logger log.Logger, db *gorm.DB, poller feed.Poller) (Bot, error) {
 	var app bot
 	var err error
 	app.bot, err = telebot.NewBot(telebot.Settings{
@@ -50,6 +52,7 @@ func NewBot(c *Config, logger log.Logger, db *gorm.DB) (Bot, error) {
 	}
 
 	app.configCommands()
+	app.poller = poller
 	app.logger = logger
 	app.db = db
 	return &app, nil
