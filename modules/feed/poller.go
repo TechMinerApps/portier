@@ -51,6 +51,7 @@ func (p *poller) Stop() error {
 	for _, worker := range p.workerPool {
 		worker.ticker.Stop()
 	}
+	close(p.feedChannel)
 	return nil
 }
 
@@ -95,8 +96,9 @@ func (p *poller) poll(s *models.Source) {
 
 		// Send item if new
 		feed := Feed{
-			FeedID: hash,
-			Item:   item,
+			SourceID: s.ID,
+			FeedID:   hash,
+			Item:     item,
 		}
 		p.feedChannel <- &feed
 

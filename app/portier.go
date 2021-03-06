@@ -16,13 +16,14 @@ import (
 )
 
 type Portier struct {
-	db     *gorm.DB
-	memDB  *buntdb.DB
-	poller feed.Poller
-	bot    bot.Bot
-	viper  *viper.Viper
-	logger log.Logger
-	config Config
+	db          *gorm.DB
+	memDB       *buntdb.DB
+	poller      feed.Poller
+	broadcaster feed.BroadCaster
+	bot         bot.Bot
+	viper       *viper.Viper
+	logger      log.Logger
+	config      Config
 }
 
 type Config struct {
