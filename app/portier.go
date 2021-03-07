@@ -77,6 +77,15 @@ func (p *Portier) Start() {
 
 // Stop shutdown portier gracefully
 func (p *Portier) Stop(sig ...os.Signal) {
+
+	// Close buntdb
+	p.memDB.Close()
+
+	// Close DB
+	db, _ := p.db.DB()
+	db.Close()
+
+	// Debug info
 	if len(sig) != 0 {
 		p.logger.Debugf("Recieved signal: %v", sig)
 	}
@@ -114,7 +123,10 @@ func (p *Portier) setupDB(c *database.DBConfig) error {
 
 func (p *Portier) setupBuntDB() error {
 	var err error
-	p.memDB, err = buntdb.Open(":memory:")
+
+	// Create a kv db to store feeds
+	// By default, buntdb will do fsync every second
+	p.memDB, err = buntdb.Open("feed.db")
 	if err != nil {
 		return err
 	}

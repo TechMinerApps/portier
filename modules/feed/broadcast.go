@@ -123,6 +123,6 @@ func (b *broadcaster) send(telegramID int64, item *models.Feed) {
 	// Send via bot
 	_, err = b.Bot.Send(&tgRecipient{ID: telegramID}, message, options)
 	if err != nil {
-		b.Logger.Errorf("Error sending message: %s", err.Error())
+		b.Logger.Errorf("Error sending message: %s\n Message is: %s", err.Error(), message)
 	}
 }
