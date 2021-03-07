@@ -21,11 +21,11 @@ type Logger interface {
 	Panicf(template string, args ...interface{})
 }
 
-type loggerType int
+type LoggerType int
 
 // Logger Type
 const (
-	MACHINE loggerType = iota
+	MACHINE LoggerType = iota
 	HUMAN
 )
 
@@ -35,7 +35,7 @@ type log struct {
 
 // Config is used to config a logger
 type Config struct {
-	Mode       loggerType
+	Mode       LoggerType
 	OutputFile string
 }
 

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -8,7 +9,6 @@ import (
 	"github.com/TechMinerApps/portier/models"
 	"github.com/TechMinerApps/portier/modules/bot"
 	"github.com/TechMinerApps/portier/modules/log"
-	"github.com/TechMinerApps/portier/modules/render"
 
 	"github.com/TechMinerApps/portier/modules/database"
 	"github.com/TechMinerApps/portier/modules/feed"
@@ -32,19 +32,18 @@ type Portier struct {
 	wg          sync.WaitGroup
 }
 
-// Config is the configuration used in viper
-type Config struct {
-	DB       database.DBConfig
-	Telegram bot.Config
-	Template render.Config
-}
-
 // NewPortier create a new portier object
 // does not need config as parameter since this is the main object
 func NewPortier() *Portier {
+
 	var p Portier
-	p.setupLogger()
+
+	// Read in config first
 	p.setupViper()
+
+	// Logger must be set up before any other setup
+	p.setupLogger()
+
 	p.setupDB(&p.config.DB)
 	p.setupBuntDB()
 	p.setupFeedComponent()
@@ -76,11 +75,16 @@ func (p *Portier) Start() {
 	p.logger.Infof("Portier started")
 }
 
+// Stop shutdown portier gracefully
 func (p *Portier) Stop(sig ...os.Signal) {
 	if len(sig) != 0 {
+		p.logger.Debugf("Recieved signal: %v", sig)
 	}
+	p.logger.Infof("Shutting down")
 	p.wg.Done()
 }
+
+// Wait is a blocking function that wait for portier to stop
 func (p *Portier) Wait() {
 	p.wg.Wait()
 }
@@ -90,7 +94,7 @@ func (p *Portier) setupLogger() error {
 
 	p.logger, err = log.NewLogger(&log.Config{
 		Mode:       log.HUMAN,
-		OutputFile: "",
+		OutputFile: p.config.Log.Path,
 	})
 	if err != nil {
 		return err
@@ -144,6 +148,8 @@ func (p *Portier) setupFeedComponent() error {
 
 func (p *Portier) setupViper() {
 	p.viper = viper.New()
+
+	// Allow --config flag to set config file
 	pflag.String("config", "config", "config file name")
 	pflag.Parse()
 	p.viper.BindPFlags(pflag.CommandLine)
@@ -151,23 +157,35 @@ func (p *Portier) setupViper() {
 	if p.viper.IsSet("config") {
 		p.viper.SetConfigFile(p.viper.GetString("config"))
 	} else {
+
 		p.viper.SetConfigName("config")
+
+		// Use YAML as config format
 		p.viper.SetConfigType("yaml")
+
+		// Allow ./config.yaml
 		p.viper.AddConfigPath(utils.AbsPath(""))
+
+		// Allow /etc/portier/config.yaml
 		p.viper.AddConfigPath("/etc/portier")
 	}
 
+	// Setup environment variable parsing
 	p.viper.SetEnvPrefix("PORTIER")
 	p.viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	p.viper.AutomaticEnv()
 
 	if err := p.viper.ReadInConfig(); err != nil {
-		// Used logger here, so setupLogger before setupViper
-		p.logger.Fatalf("Unable to read in config: %v", err)
+
+		// Do not use logger here, logger is not yet setup
+		fmt.Printf("Unable to read in config: %v\n", err)
+		os.Exit(-1)
 	}
 
+	// Load config into p.config
 	if err := p.viper.Unmarshal(&p.config); err != nil {
-		p.logger.Fatalf("Unable to decode into struct: %v", err)
+		fmt.Printf("Unable to unmarshal into struct: %vi\n", err)
+		os.Exit(-1)
 	}
 }
 
