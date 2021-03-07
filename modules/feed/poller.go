@@ -25,7 +25,7 @@ type poller struct {
 	db          *buntdb.DB
 	sourcePool  []*models.Source
 	workerPool  map[uint]worker
-	feedChannel chan<- *Feed
+	feedChannel chan<- *models.Feed
 	logger      log.Logger
 }
 
@@ -38,7 +38,7 @@ type worker struct {
 type PollerConfig struct {
 	SourcePool  []*models.Source
 	DB          *buntdb.DB
-	FeedChannel chan<- *Feed
+	FeedChannel chan<- *models.Feed
 	Logger      log.Logger
 }
 
@@ -120,7 +120,7 @@ func (p *poller) poll(s *models.Source) {
 		}
 
 		// Send item if new
-		feed := Feed{
+		feed := models.Feed{
 			SourceID: s.ID,
 			FeedID:   hash,
 			Item:     item,

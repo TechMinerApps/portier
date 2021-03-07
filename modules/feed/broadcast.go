@@ -5,6 +5,7 @@ import (
 
 	"github.com/TechMinerApps/portier/models"
 	"github.com/TechMinerApps/portier/modules/log"
+	"github.com/TechMinerApps/portier/modules/render"
 	"gopkg.in/tucnak/telebot.v2"
 	"gorm.io/gorm"
 )
@@ -24,16 +25,20 @@ type BroadCastConfig struct {
 	WorkerCount int
 
 	// FeedChannel is where feed item comes from
-	FeedChannel <-chan *Feed
+	FeedChannel <-chan *models.Feed
 
 	// Bot is the bot which broadcaster broadcast to
 	Bot *telebot.Bot
 
 	// Logger is used to log events
 	Logger log.Logger
+
+	// Template is a string used to render text
+	Template string
 }
 
 type broadcaster struct {
+	renderer render.Renderer
 	BroadCastConfig
 }
 
@@ -49,6 +54,16 @@ func NewBroadcaster(c *BroadCastConfig) (*broadcaster, error) {
 	b := &broadcaster{
 		BroadCastConfig: *c,
 	}
+
+	var err error
+	cfg := render.Config{
+		Template: c.Template,
+	}
+	b.renderer, err = render.NewRenderer(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	return b, nil
 }
 func (b *broadcaster) Start() {
@@ -63,7 +78,7 @@ func (b *broadcaster) Start() {
 	}
 }
 
-func (b *broadcaster) broadcast(item *Feed) {
+func (b *broadcaster) broadcast(item *models.Feed) {
 	var source models.Source
 	source.ID = item.SourceID
 	var users []*models.User
@@ -76,8 +91,19 @@ func (b *broadcaster) broadcast(item *Feed) {
 
 }
 
-func (b *broadcaster) send(telegramID int64, item *Feed) {
-	_, err := b.Bot.Send(&tgRecipient{ID: telegramID}, item.Item.Title)
+func (b *broadcaster) send(telegramID int64, item *models.Feed) {
+	var err error
+	message, err := b.renderer.Render(item)
+	if err != nil {
+		b.Logger.Errorf("Error sending message: %s", err.Error())
+		return
+	}
+	options := &telebot.SendOptions{
+		DisableWebPagePreview: false,
+		ParseMode:             telebot.ModeMarkdownV2,
+		DisableNotification:   true,
+	}
+	_, err = b.Bot.Send(&tgRecipient{ID: telegramID}, message, options)
 	if err != nil {
 		b.Logger.Errorf("Error sending message: %s", err.Error())
 	}

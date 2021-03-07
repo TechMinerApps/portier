@@ -8,6 +8,7 @@ import (
 	"github.com/TechMinerApps/portier/models"
 	"github.com/TechMinerApps/portier/modules/bot"
 	"github.com/TechMinerApps/portier/modules/log"
+	"github.com/TechMinerApps/portier/modules/render"
 
 	"github.com/TechMinerApps/portier/modules/database"
 	"github.com/TechMinerApps/portier/modules/feed"
@@ -35,6 +36,7 @@ type Portier struct {
 type Config struct {
 	DB       database.DBConfig
 	Telegram bot.Config
+	Template render.Config
 }
 
 // NewPortier create a new portier object
@@ -116,7 +118,7 @@ func (p *Portier) setupBuntDB() error {
 }
 
 func (p *Portier) setupFeedComponent() error {
-	feedChan := make(chan *feed.Feed, 10) // hardcoded 10 buffer space
+	feedChan := make(chan *models.Feed, 10) // hardcoded 10 buffer space
 	var sourcePool []*models.Source
 	p.db.Model(&models.Source{}).Find(&sourcePool)
 	pollerConfig := &feed.PollerConfig{
@@ -133,6 +135,7 @@ func (p *Portier) setupFeedComponent() error {
 		FeedChannel: feedChan,
 		Bot:         p.bot.Bot(),
 		Logger:      p.logger,
+		Template:    p.config.Template.Template,
 	}
 	p.broadcaster, _ = feed.NewBroadcaster(broadcasterConfig)
 
