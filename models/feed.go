@@ -1,10 +1,10 @@
 package models
 
-// Feed is a RSS/Atom Feed
+import "github.com/mmcdole/gofeed"
+
+// Feed is a struct used in communication between Poller and other modules
 type Feed struct {
-	ID         uint `gorm:"primary_key;AUTO_INCREMENT"`
-	URL        string
-	Title      string
-	ErrorCount uint
-	Content    []Content
+	SourceID uint
+	FeedID   string
+	Item     *gofeed.Item
 }

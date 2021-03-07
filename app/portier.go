@@ -1,10 +1,14 @@
 package app
 
 import (
+	"os"
 	"strings"
+	"sync"
 
+	"github.com/TechMinerApps/portier/models"
 	"github.com/TechMinerApps/portier/modules/bot"
 	"github.com/TechMinerApps/portier/modules/log"
+	"github.com/TechMinerApps/portier/modules/render"
 
 	"github.com/TechMinerApps/portier/modules/database"
 	"github.com/TechMinerApps/portier/modules/feed"
@@ -15,34 +19,70 @@ import (
 	"gorm.io/gorm"
 )
 
+// Portier is the main app
 type Portier struct {
-	db     *gorm.DB
-	memDB  *buntdb.DB
-	poller feed.Poller
-	bot    bot.Bot
-	viper  *viper.Viper
-	logger log.Logger
-	config Config
+	db          *gorm.DB
+	memDB       *buntdb.DB
+	poller      feed.Poller
+	broadcaster feed.BroadCaster
+	bot         bot.Bot
+	viper       *viper.Viper
+	logger      log.Logger
+	config      Config
+	wg          sync.WaitGroup
 }
 
+// Config is the configuration used in viper
 type Config struct {
 	DB       database.DBConfig
 	Telegram bot.Config
+	Template render.Config
 }
 
+// NewPortier create a new portier object
+// does not need config as parameter since this is the main object
 func NewPortier() *Portier {
 	var p Portier
 	p.setupLogger()
 	p.setupViper()
 	p.setupDB(&p.config.DB)
 	p.setupBuntDB()
-	p.setupBot()
+	p.setupFeedComponent()
+
+	p.logger.Infof("Portier Setup Succeeded")
 	return &p
 
 }
 
+// Start is used to start portier instance
+// do not return error since error handling show be done within portier object
 func (p *Portier) Start() {
-	p.bot.Start()
+
+	// telebot.Bot.Start() is a blocking method, so start the bot in a goroutine
+	go p.bot.Start()
+	p.logger.Infof("Telegram Bot Started")
+
+	// Start poller
+	p.poller.Start()
+	p.logger.Infof("Feed poller started")
+
+	// Start Broadcaster
+	p.broadcaster.Start()
+	p.logger.Infof("Broadcaster started")
+
+	// Add waitgroup
+	p.wg.Add(1)
+
+	p.logger.Infof("Portier started")
+}
+
+func (p *Portier) Stop(sig ...os.Signal) {
+	if len(sig) != 0 {
+	}
+	p.wg.Done()
+}
+func (p *Portier) Wait() {
+	p.wg.Wait()
 }
 
 func (p *Portier) setupLogger() error {
@@ -64,6 +104,7 @@ func (p *Portier) setupDB(c *database.DBConfig) error {
 	if err != nil {
 		return err
 	}
+	p.db.AutoMigrate(&models.User{}, &models.Source{})
 	return nil
 }
 
@@ -76,7 +117,28 @@ func (p *Portier) setupBuntDB() error {
 	return nil
 }
 
-func (p *Portier) setupPoller() error {
+func (p *Portier) setupFeedComponent() error {
+	feedChan := make(chan *models.Feed, 10) // hardcoded 10 buffer space
+	var sourcePool []*models.Source
+	p.db.Model(&models.Source{}).Find(&sourcePool)
+	pollerConfig := &feed.PollerConfig{
+		SourcePool:  sourcePool,
+		DB:          p.memDB,
+		FeedChannel: feedChan,
+		Logger:      p.logger,
+	}
+	p.poller, _ = feed.NewPoller(pollerConfig)
+	p.setupBot()
+	broadcasterConfig := &feed.BroadCastConfig{
+		DB:          p.db,
+		WorkerCount: 1,
+		FeedChannel: feedChan,
+		Bot:         p.bot.Bot(),
+		Logger:      p.logger,
+		Template:    p.config.Template.Template,
+	}
+	p.broadcaster, _ = feed.NewBroadcaster(broadcasterConfig)
+
 	return nil
 }
 
@@ -111,7 +173,7 @@ func (p *Portier) setupViper() {
 
 func (p *Portier) setupBot() error {
 	var err error
-	p.bot, err = bot.NewBot(&p.config.Telegram, p.logger)
+	p.bot, err = bot.NewBot(&p.config.Telegram, p.logger, p.db, p.poller)
 	if err != nil {
 		return err
 	}
