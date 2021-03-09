@@ -46,7 +46,7 @@ func NewPortier() *Portier {
 	// Logger must be set up before any other setup
 	p.setupLogger()
 
-	p.setupDB(&p.config.DB)
+	p.setupDB()
 	p.setupBuntDB()
 	p.setupFeedComponent()
 
@@ -120,11 +120,21 @@ func (p *Portier) setupLogger() {
 	}
 }
 
-func (p *Portier) setupDB(c *database.DBConfig) {
+func (p *Portier) setupDB() {
 	var err error
 
+	cfg := database.DBConfig{
+		Type:     database.ConvertToDBType(p.config.DB.Type),
+		Path:     p.config.DB.Path,
+		Username: p.config.DB.Username,
+		Password: p.config.DB.Password,
+		Host:     p.config.DB.Host,
+		Port:     p.config.DB.Port,
+		DBName:   p.config.DB.DBName,
+	}
+
 	// Connect to database
-	p.db, err = database.NewDBConnection(c)
+	p.db, err = database.NewDBConnection(&cfg)
 	if err != nil {
 		p.logger.Fatalf("Error setting up database: %s", err.Error())
 	}
@@ -138,7 +148,7 @@ func (p *Portier) setupBuntDB() {
 
 	// Create a kv db to store feeds
 	// By default, buntdb will do fsync every second
-	p.memDB, err = buntdb.Open("feed.db")
+	p.memDB, err = buntdb.Open(p.config.BuntDB.Path)
 	if err != nil {
 		p.logger.Fatalf("BuntDB error: %s", err.Error())
 	}
@@ -148,15 +158,28 @@ func (p *Portier) setupFeedComponent() {
 	var err error
 	feedChan := make(chan *models.Feed, 10) // hardcoded 10 buffer space
 	var sourcePool []*models.Source
+
+	// Load sources into var sourcePool
 	p.db.Model(&models.Source{}).Find(&sourcePool)
+
+	// Setup poller
 	pollerConfig := &feed.PollerConfig{
 		SourcePool:  sourcePool,
 		DB:          p.memDB,
 		FeedChannel: feedChan,
 		Logger:      p.logger,
 	}
-	p.poller, _ = feed.NewPoller(pollerConfig)
+	p.poller, err = feed.NewPoller(pollerConfig)
+	if err != nil {
+		p.logger.Fatalf("Error creating poller: %s", err.Error())
+	}
+
+	// Setup Bot here
+	// Because bot rely on poller, need poller object to interact with sources
 	p.setupBot()
+
+	// Then setup broadcaster
+	// Broadcaster rely on bot to broadcast
 	broadcasterConfig := &feed.BroadCastConfig{
 		DB:          p.db,
 		WorkerCount: 1,
@@ -208,6 +231,9 @@ func (p *Portier) setupViper() {
 		fmt.Printf("Unable to read in config: %v\n", err)
 		os.Exit(-1)
 	}
+
+	// Load default config
+	p.config = DefaultConfig
 
 	// Load config into p.config
 	if err := p.viper.Unmarshal(&p.config); err != nil {

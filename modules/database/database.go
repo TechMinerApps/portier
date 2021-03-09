@@ -19,17 +19,23 @@ const (
 	MYSQL
 )
 
-// DBConfig is the config used to start a DB connection
-type DBConfig struct {
-	Type         DBType
-	SQLiteConfig sqliteConfig `mapstructure:",squash"`
-	MySQLConfig  mysqlConfig  `mapstructure:",squash"`
-}
-type sqliteConfig struct {
-	Path string
+// ConvertToDBType convert a input string to DBType
+func ConvertToDBType(input string) DBType {
+	switch input {
+	case "sqlite":
+		return SQLITE
+	case "mysql":
+		return MYSQL
+	default:
+		return SQLITE
+
+	}
 }
 
-type mysqlConfig struct {
+// DBConfig is the config used to start a DB connection
+type DBConfig struct {
+	Type     DBType
+	Path     string
 	Username string
 	Password string
 	Host     string
@@ -45,15 +51,15 @@ func NewDBConnection(c *DBConfig) (*gorm.DB, error) {
 
 	switch c.Type {
 	case SQLITE:
-		path := utils.AbsPath(c.SQLiteConfig.Path)
+		path := utils.AbsPath(c.Path)
 		DB, err = gorm.Open(sqlite.Open(path), &gorm.Config{})
 	case MYSQL:
 		cfg := mysqldriver.NewConfig()
-		cfg.User = c.MySQLConfig.Username
-		cfg.Passwd = c.MySQLConfig.Password
+		cfg.User = c.Username
+		cfg.Passwd = c.Password
 		cfg.Net = "tcp"
-		cfg.Addr = c.MySQLConfig.Host + ":" + strconv.Itoa(c.MySQLConfig.Port)
-		cfg.DBName = c.MySQLConfig.DBName
+		cfg.Addr = c.Host + ":" + strconv.Itoa(c.Port)
+		cfg.DBName = c.DBName
 		// Charset is utf8mb4 by default
 		DB, err = gorm.Open(mysql.New(mysql.Config{
 			DSN: cfg.FormatDSN(),
