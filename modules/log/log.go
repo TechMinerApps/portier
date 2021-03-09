@@ -1,6 +1,7 @@
 package log
 
 import (
+	"fmt"
 	"os"
 
 	"go.uber.org/zap"
@@ -21,11 +22,12 @@ type Logger interface {
 	Panicf(template string, args ...interface{})
 }
 
-type loggerType int
+// LoggerType provide options for human readable or json output
+type LoggerType int
 
 // Logger Type
 const (
-	MACHINE loggerType = iota
+	MACHINE LoggerType = iota
 	HUMAN
 )
 
@@ -35,8 +37,23 @@ type log struct {
 
 // Config is used to config a logger
 type Config struct {
-	Mode       loggerType
+	Mode       LoggerType
 	OutputFile string
+}
+
+// ConvertToLoggerType convert input string to LoggerType
+// no error is returned
+func ConvertToLoggerType(input string) LoggerType {
+	switch input {
+	case "human":
+		return HUMAN
+	case "machine":
+		return MACHINE
+	default:
+		fmt.Printf("Warning! unexpected log type \"%s\", using human readable type.\n", input)
+		return HUMAN
+
+	}
 }
 
 // NewLogger generates a new logger based on config

@@ -2,6 +2,7 @@ package render
 
 import (
 	"bytes"
+	"strings"
 	"text/template"
 
 	"github.com/TechMinerApps/portier/models"
@@ -36,6 +37,9 @@ func (r *renderer) Render(feed *models.Feed) (string, error) {
 	if err := r.template.Execute(&buffer, feed.Item); err != nil {
 		return "", err
 	}
-	return buffer.String(), nil
+	var message string
+	message = buffer.String()
+	message = strings.Replace(message, ".", "\\.", -1)
+	return message, nil
 
 }

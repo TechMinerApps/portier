@@ -23,3 +23,6 @@ config.yml
 
 # Development Database
 dev.db
+
+# feed
+feed.db

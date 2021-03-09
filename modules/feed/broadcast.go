@@ -13,6 +13,7 @@ import (
 // BroadCaster receive item from channel and broadcast it to any user subscribe to it
 type BroadCaster interface {
 	Start()
+	Stop()
 }
 
 // BroadCastConfig is used to config a broadcaster
@@ -42,6 +43,7 @@ type broadcaster struct {
 	BroadCastConfig
 }
 
+// Use to implement telebot.Recipient interface
 type tgRecipient struct {
 	ID int64
 }
@@ -50,7 +52,8 @@ func (t *tgRecipient) Recipient() string {
 	return strconv.FormatInt(t.ID, 10)
 }
 
-func NewBroadcaster(c *BroadCastConfig) (*broadcaster, error) {
+// NewBroadcaster generates new Broadcaster instance from config
+func NewBroadcaster(c *BroadCastConfig) (BroadCaster, error) {
 	b := &broadcaster{
 		BroadCastConfig: *c,
 	}
@@ -67,8 +70,9 @@ func NewBroadcaster(c *BroadCastConfig) (*broadcaster, error) {
 	return b, nil
 }
 func (b *broadcaster) Start() {
-	for i := 0; i < b.WorkerCount; i++ {
 
+	// Create workers according to WorkerCount
+	for i := 0; i < b.WorkerCount; i++ {
 		go func() {
 			for item := range b.FeedChannel {
 				b.Logger.Debugf("Broadcasting feed item %s", item.Item.Title)
@@ -77,34 +81,48 @@ func (b *broadcaster) Start() {
 		}()
 	}
 }
+func (b *broadcaster) Stop() {
+	// Do nothing now
+}
 
 func (b *broadcaster) broadcast(item *models.Feed) {
 	var source models.Source
 	source.ID = item.SourceID
+
+	// Find users subscribed
 	var users []*models.User
 	b.DB.Model(&source).Association("Users")
 	b.DB.Model(&source).Association("Users").Find(&users)
 
 	for _, u := range users {
+
+		// Send message sequentially
 		b.send(u.TelegramID, item)
 	}
 
 }
 
 func (b *broadcaster) send(telegramID int64, item *models.Feed) {
+
 	var err error
+
+	// Render message
 	message, err := b.renderer.Render(item)
 	if err != nil {
-		b.Logger.Errorf("Error sending message: %s", err.Error())
+		b.Logger.Errorf("Error rendering message: %s", err.Error())
 		return
 	}
+
+	// Set telebot options
 	options := &telebot.SendOptions{
 		DisableWebPagePreview: false,
 		ParseMode:             telebot.ModeMarkdownV2,
 		DisableNotification:   true,
 	}
+
+	// Send via bot
 	_, err = b.Bot.Send(&tgRecipient{ID: telegramID}, message, options)
 	if err != nil {
-		b.Logger.Errorf("Error sending message: %s", err.Error())
+		b.Logger.Errorf("Error sending message: %s\n Message is: %s", err.Error(), message)
 	}
 }
