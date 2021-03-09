@@ -38,6 +38,8 @@ func NewPortier() *Portier {
 
 	var p Portier
 
+	// All the setup* func should handle error by itself
+
 	// Read in config first
 	p.setupViper()
 
@@ -76,13 +78,18 @@ func (p *Portier) Start() {
 }
 
 // Stop shutdown portier gracefully
+// can accept a list of signals, print them if provided
 func (p *Portier) Stop(sig ...os.Signal) {
 
 	// Close buntdb
 	p.memDB.Close()
 
 	// Close DB
-	db, _ := p.db.DB()
+	db, err := p.db.DB()
+	if err != nil {
+		// Really should not be an error
+		p.logger.Panicf("Getting GORM DB instance error")
+	}
 	db.Close()
 
 	// Debug info
@@ -98,42 +105,47 @@ func (p *Portier) Wait() {
 	p.wg.Wait()
 }
 
-func (p *Portier) setupLogger() error {
+func (p *Portier) setupLogger() {
 	var err error
 
 	p.logger, err = log.NewLogger(&log.Config{
-		Mode:       log.HUMAN,
+		Mode:       log.ConvertToLoggerType(p.config.Log.Mode),
 		OutputFile: p.config.Log.Path,
 	})
 	if err != nil {
-		return err
+
+		// Fatal error
+		fmt.Printf("Error setting up logger: %s\n", err.Error())
+		os.Exit(-1)
 	}
-	return nil
 }
 
-func (p *Portier) setupDB(c *database.DBConfig) error {
+func (p *Portier) setupDB(c *database.DBConfig) {
 	var err error
+
+	// Connect to database
 	p.db, err = database.NewDBConnection(c)
 	if err != nil {
-		return err
+		p.logger.Fatalf("Error setting up database: %s", err.Error())
 	}
+
+	// Create table if not exist
 	p.db.AutoMigrate(&models.User{}, &models.Source{})
-	return nil
 }
 
-func (p *Portier) setupBuntDB() error {
+func (p *Portier) setupBuntDB() {
 	var err error
 
 	// Create a kv db to store feeds
 	// By default, buntdb will do fsync every second
 	p.memDB, err = buntdb.Open("feed.db")
 	if err != nil {
-		return err
+		p.logger.Fatalf("BuntDB error: %s", err.Error())
 	}
-	return nil
 }
 
-func (p *Portier) setupFeedComponent() error {
+func (p *Portier) setupFeedComponent() {
+	var err error
 	feedChan := make(chan *models.Feed, 10) // hardcoded 10 buffer space
 	var sourcePool []*models.Source
 	p.db.Model(&models.Source{}).Find(&sourcePool)
@@ -151,11 +163,13 @@ func (p *Portier) setupFeedComponent() error {
 		FeedChannel: feedChan,
 		Bot:         p.bot.Bot(),
 		Logger:      p.logger,
-		Template:    p.config.Template.Template,
+		Template:    p.config.Template,
 	}
-	p.broadcaster, _ = feed.NewBroadcaster(broadcasterConfig)
+	p.broadcaster, err = feed.NewBroadcaster(broadcasterConfig)
+	if err != nil {
+		p.logger.Fatalf("Error creating broadcaster: %s", err.Error())
+	}
 
-	return nil
 }
 
 func (p *Portier) setupViper() {
@@ -189,6 +203,7 @@ func (p *Portier) setupViper() {
 
 	if err := p.viper.ReadInConfig(); err != nil {
 
+		// Fatal error
 		// Do not use logger here, logger is not yet setup
 		fmt.Printf("Unable to read in config: %v\n", err)
 		os.Exit(-1)
@@ -196,6 +211,7 @@ func (p *Portier) setupViper() {
 
 	// Load config into p.config
 	if err := p.viper.Unmarshal(&p.config); err != nil {
+		// Fatal error
 		fmt.Printf("Unable to unmarshal into struct: %vi\n", err)
 		os.Exit(-1)
 	}

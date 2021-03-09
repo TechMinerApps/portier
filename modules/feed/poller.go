@@ -70,6 +70,15 @@ func (p *poller) RemoveSource(s *models.Source) error {
 	p.workerPool[s.ID].ticker.Stop()
 	return nil
 }
+func (p *poller) UpdateSource(s *models.Source) error {
+	if p.sourcePool[s.ID].UpdateInterval <= s.UpdateInterval {
+		return nil
+	}
+	p.workerPool[s.ID].ticker.Stop()
+	p.sourcePool[s.ID] = s
+	go p.worker(s)
+	return nil
+}
 func (p *poller) FetchTitle(url string) (string, error) {
 	feed, err := p.parser.ParseURL(url)
 	if err != nil {
