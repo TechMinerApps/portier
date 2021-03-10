@@ -105,6 +105,21 @@ func (p *Portier) Wait() {
 	p.wg.Wait()
 }
 
+// Poller return the poller portier used
+func (p *Portier) Poller() feed.Poller {
+	return p.poller
+}
+
+// Logger returns the logger portier used
+func (p *Portier) Logger() log.Logger {
+	return p.logger
+}
+
+// DB returns the database instance portier used
+func (p *Portier) DB() *gorm.DB {
+	return p.db
+}
+
 func (p *Portier) setupLogger() {
 	var err error
 
@@ -245,7 +260,7 @@ func (p *Portier) setupViper() {
 
 func (p *Portier) setupBot() error {
 	var err error
-	p.bot, err = bot.NewBot(&p.config.Telegram, p.logger, p.db, p.poller)
+	p.bot, err = bot.NewBot(&p.config.Telegram, p)
 	if err != nil {
 		return err
 	}
