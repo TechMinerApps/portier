@@ -9,6 +9,7 @@ import (
 	"github.com/TechMinerApps/portier/models"
 	"github.com/TechMinerApps/portier/modules/bot"
 	"github.com/TechMinerApps/portier/modules/log"
+	"github.com/TechMinerApps/portier/modules/telegraph"
 
 	"github.com/TechMinerApps/portier/modules/database"
 	"github.com/TechMinerApps/portier/modules/feed"
@@ -202,6 +203,14 @@ func (p *Portier) setupFeedComponent() {
 		Bot:         p.bot.Bot(),
 		Logger:      p.logger,
 		Template:    p.config.Template,
+		Telegraph: &telegraph.Config{
+			AccountNumber: p.config.Telegraph.Account,
+			ShortName:     p.config.Telegraph.ShortName,
+			AuthorName:    p.config.Telegraph.Author,
+			AuthorURL:     p.config.Telegraph.AuthorURL,
+			AccessToken:   []string{},
+			Logger:        p.logger,
+		},
 	}
 	p.broadcaster, err = feed.NewBroadcaster(broadcasterConfig)
 	if err != nil {

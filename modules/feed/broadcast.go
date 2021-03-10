@@ -6,6 +6,7 @@ import (
 	"github.com/TechMinerApps/portier/models"
 	"github.com/TechMinerApps/portier/modules/log"
 	"github.com/TechMinerApps/portier/modules/render"
+	"github.com/TechMinerApps/portier/modules/telegraph"
 	"gopkg.in/tucnak/telebot.v2"
 	"gorm.io/gorm"
 )
@@ -36,10 +37,14 @@ type BroadCastConfig struct {
 
 	// Template is a string used to render text
 	Template string
+
+	// Telegraph is the config of telegraph module
+	Telegraph *telegraph.Config
 }
 
 type broadcaster struct {
 	renderer render.Renderer
+	tgph     telegraph.Telegraph
 	BroadCastConfig
 }
 
@@ -66,10 +71,15 @@ func NewBroadcaster(c *BroadCastConfig) (BroadCaster, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	b.tgph, err = telegraph.NewTelegraph(c.Telegraph)
+	if err != nil {
+		return nil, err
+	}
 	return b, nil
 }
 func (b *broadcaster) Start() {
+
+	b.tgph.Start()
 
 	// Create workers according to WorkerCount
 	for i := 0; i < b.WorkerCount; i++ {
@@ -88,6 +98,12 @@ func (b *broadcaster) Stop() {
 func (b *broadcaster) broadcast(item *models.Feed) {
 	var source models.Source
 	source.ID = item.SourceID
+
+	var err error
+	item.TelegraphURL, err = b.tgph.Publish(item)
+	if err != nil {
+		return
+	}
 
 	// Find users subscribed
 	var users []*models.User

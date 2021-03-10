@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/TechMinerApps/portier/models"
+	"github.com/TechMinerApps/portier/modules/log"
 	tgraph "github.com/meinside/telegraph-go"
 )
 
@@ -16,10 +17,18 @@ type Telegraph interface {
 
 	// Publish is a blocking function that insert the provided feed into queue and wait for process
 	Publish(item *models.Feed) (string, error)
+
+	Start()
 }
 
 type Config struct {
+	AccountNumber int
+	ShortName     string
+	AuthorName    string
+	AuthorURL     string
+
 	AccessToken []string
+	Logger      log.Logger
 }
 
 type Item struct {
@@ -28,6 +37,8 @@ type Item struct {
 }
 
 type telegraph struct {
+	logger        log.Logger
+	config        *Config
 	clientPool    []*tgraph.Client
 	currentClient int
 	lock          sync.Mutex
@@ -35,7 +46,21 @@ type telegraph struct {
 }
 
 func NewTelegraph(c *Config) (Telegraph, error) {
-	var t telegraph
+	t := &telegraph{
+		logger:        c.Logger,
+		config:        c,
+		clientPool:    []*tgraph.Client{},
+		currentClient: 0,
+		lock:          sync.Mutex{},
+		queue:         make(chan *Item),
+	}
+
+	if len(c.AccessToken) == 0 {
+		if err := t.createAccount(); err != nil {
+			return nil, err
+		}
+		return t, nil
+	}
 	for _, token := range c.AccessToken {
 		client, err := tgraph.Load(token)
 		if err != nil {
@@ -43,10 +68,24 @@ func NewTelegraph(c *Config) (Telegraph, error) {
 		}
 		t.clientPool = append(t.clientPool, client)
 	}
-	return &t, nil
+	return t, nil
 }
 
-func (t *telegraph) Start() error {
+func (t *telegraph) createAccount() error {
+	for i := 0; i < t.config.AccountNumber; i++ {
+		client, err := tgraph.Create(t.config.ShortName, t.config.AuthorName, t.config.AuthorURL)
+		if err != nil {
+			return err
+		}
+		t.clientPool = append(t.clientPool, client)
+		t.config.AccessToken = append(t.config.AccessToken, client.AccessToken)
+		t.logger.Infof("Created Telegraph account %d success", i)
+		time.Sleep(time.Second)
+	}
+	return nil
+}
+
+func (t *telegraph) Start() {
 	go func() {
 		for item := range t.queue {
 			for {
@@ -55,13 +94,13 @@ func (t *telegraph) Start() error {
 					item.ResultChan <- url
 					break
 				} else {
+					t.logger.Warnf("Error publishing to telegraph: %s", err.Error())
 					time.Sleep(60 * time.Second)
 				}
 			}
 
 		}
 	}()
-	return nil
 }
 
 func (t *telegraph) Publish(feed *models.Feed) (string, error) {
@@ -77,6 +116,7 @@ func (t *telegraph) Publish(feed *models.Feed) (string, error) {
 	// Wait for result
 
 	url := <-resultCh
+	close(resultCh)
 
 	return url, nil
 }
@@ -86,6 +126,9 @@ func (t *telegraph) publish(item *Item) (string, error) {
 	// publish should not mess with channel
 
 	htmlContent := item.Feed.Item.Content
+	if htmlContent == "" {
+		htmlContent = "Empty Content"
+	}
 	var err error = nil
 	var url string = ""
 	t.lock.Lock()
@@ -99,6 +142,10 @@ func (t *telegraph) publish(item *Item) (string, error) {
 
 	} else {
 		err = err1
+	}
+	t.currentClient++
+	if t.currentClient == len(t.clientPool) {
+		t.currentClient = 0
 	}
 	t.lock.Unlock()
 	return url, err
