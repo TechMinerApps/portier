@@ -6,12 +6,12 @@ import (
 )
 
 func (b *bot) cmdStart(m *telebot.Message) {
-	b.logger.Infof("User \"%s\" /start recieved", m.Sender.Username)
+	b.app.Logger().Infof("User \"%s\" /start recieved", m.Sender.Username)
 	var user models.User
 	user.TelegramID = m.Chat.ID
-	if err := b.db.Where(&user).FirstOrCreate(&user).Error; err != nil {
-		b.logger.Errorf("Database error: %s", err.Error())
+	if err := b.app.DB().Where(&user).FirstOrCreate(&user).Error; err != nil {
+		b.app.Logger().Errorf("Database error: %s", err.Error())
 	}
-	b.logger.Infof("New user \"%s\" registered into database with ID: %d", m.Sender.Username, m.Chat.ID)
+	b.app.Logger().Infof("New user \"%s\" registered into database with ID: %d", m.Sender.Username, m.Chat.ID)
 	b.Bot().Send(m.Chat, "Welcome to portier")
 }

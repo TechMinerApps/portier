@@ -8,6 +8,7 @@ import (
 	"github.com/TechMinerApps/portier/models"
 )
 
+// Config is a renderer config
 type Config struct {
 	Template string
 }
@@ -34,12 +35,13 @@ func NewRenderer(c Config) (Renderer, error) {
 
 func (r *renderer) Render(feed *models.Feed) (string, error) {
 	var buffer bytes.Buffer
-	if err := r.template.Execute(&buffer, feed.Item); err != nil {
+	if err := r.template.Execute(&buffer, feed); err != nil {
 		return "", err
 	}
 	var message string
 	message = buffer.String()
 	message = strings.Replace(message, ".", "\\.", -1)
+	message = strings.Replace(message, "|", "\\|", -1)
 	return message, nil
 
 }

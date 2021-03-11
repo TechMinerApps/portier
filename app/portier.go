@@ -9,6 +9,7 @@ import (
 	"github.com/TechMinerApps/portier/models"
 	"github.com/TechMinerApps/portier/modules/bot"
 	"github.com/TechMinerApps/portier/modules/log"
+	"github.com/TechMinerApps/portier/modules/telegraph"
 
 	"github.com/TechMinerApps/portier/modules/database"
 	"github.com/TechMinerApps/portier/modules/feed"
@@ -105,6 +106,21 @@ func (p *Portier) Wait() {
 	p.wg.Wait()
 }
 
+// Poller return the poller portier used
+func (p *Portier) Poller() feed.Poller {
+	return p.poller
+}
+
+// Logger returns the logger portier used
+func (p *Portier) Logger() log.Logger {
+	return p.logger
+}
+
+// DB returns the database instance portier used
+func (p *Portier) DB() *gorm.DB {
+	return p.db
+}
+
 func (p *Portier) setupLogger() {
 	var err error
 
@@ -187,6 +203,14 @@ func (p *Portier) setupFeedComponent() {
 		Bot:         p.bot.Bot(),
 		Logger:      p.logger,
 		Template:    p.config.Template,
+		Telegraph: &telegraph.Config{
+			AccountNumber: p.config.Telegraph.Account,
+			ShortName:     p.config.Telegraph.ShortName,
+			AuthorName:    p.config.Telegraph.Author,
+			AuthorURL:     p.config.Telegraph.AuthorURL,
+			AccessToken:   []string{},
+			Logger:        p.logger,
+		},
 	}
 	p.broadcaster, err = feed.NewBroadcaster(broadcasterConfig)
 	if err != nil {
@@ -245,7 +269,7 @@ func (p *Portier) setupViper() {
 
 func (p *Portier) setupBot() error {
 	var err error
-	p.bot, err = bot.NewBot(&p.config.Telegram, p.logger, p.db, p.poller)
+	p.bot, err = bot.NewBot(&p.config.Telegram, p)
 	if err != nil {
 		return err
 	}

@@ -15,7 +15,7 @@ func Test_renderer_Render(t *testing.T) {
 		feed *models.Feed
 	}
 
-	Template := "{{ .Title }}"
+	Template := "{{ .Item.Title }}"
 	feed := &models.Feed{
 		SourceID: 0,
 		FeedID:   "",

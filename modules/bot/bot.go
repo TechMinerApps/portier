@@ -10,10 +10,12 @@ import (
 	"gorm.io/gorm"
 )
 
+// Config is a config bot used
 type Config struct {
 	Token string
 }
 
+// Bot is the control interface provided to portier main instance
 type Bot interface {
 
 	// Start is used to start the bot
@@ -25,17 +27,27 @@ type Bot interface {
 	// Bot return the original telebot.Bot object
 	Bot() *telebot.Bot
 }
-type bot struct {
-	poller feed.Poller
-	bot    *telebot.Bot
-	db     *gorm.DB
-	logger log.Logger
+
+// Portier interface is used to communicate to main instance
+type Portier interface {
+	Poller() feed.Poller
+	Logger() log.Logger
+	DB() *gorm.DB
 }
 
-func NewBot(c *Config, logger log.Logger, db *gorm.DB, poller feed.Poller) (Bot, error) {
-	var app bot
+type bot struct {
+	app Portier
+	bot *telebot.Bot
+}
+
+// NewBot create a bot according to config
+func NewBot(c *Config, app Portier) (Bot, error) {
 	var err error
-	app.bot, err = telebot.NewBot(telebot.Settings{
+	b := &bot{
+		app: app,
+		bot: &telebot.Bot{},
+	}
+	b.bot, err = telebot.NewBot(telebot.Settings{
 		URL:         "",
 		Token:       c.Token,
 		Updates:     0,
@@ -51,11 +63,8 @@ func NewBot(c *Config, logger log.Logger, db *gorm.DB, poller feed.Poller) (Bot,
 		return nil, err
 	}
 
-	app.configCommands()
-	app.poller = poller
-	app.logger = logger
-	app.db = db
-	return &app, nil
+	b.configCommands()
+	return b, nil
 }
 
 func (b *bot) Start() {
