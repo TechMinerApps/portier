@@ -131,6 +131,7 @@ func (p *poller) worker(s *models.Source) {
 	// make sure to call it in a new go routine
 	// worker() acquire worker lock, so don't acquire it in upper function
 	ticker := time.NewTicker(time.Duration(s.UpdateInterval * uint(time.Second)))
+	//ticker := time.NewTicker(time.Second)
 	var w worker
 	w.ticker = ticker
 
@@ -181,11 +182,7 @@ func (p *poller) poll(s *models.Source) {
 		p.logger.Infof("Sending feed item from %s to broadcaster", s.Title)
 		p.feedChannel <- &feed
 
-		// Then store it in db
-		err = p.db.Update(func(tx *buntdb.Tx) error {
-			_, _, err := tx.Set(hash, "exists", nil)
-			return err
-		})
+		// Store feed item into memdb is done by broadcaster
 	}
 }
 

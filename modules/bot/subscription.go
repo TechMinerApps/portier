@@ -1,7 +1,10 @@
 package bot
 
 import (
+	"strconv"
+
 	"github.com/TechMinerApps/portier/models"
+	"github.com/tidwall/buntdb"
 
 	"gorm.io/gorm"
 
@@ -34,5 +37,46 @@ func (b *bot) cmdSub(m *telebot.Message) {
 
 	b.app.Poller().AddSource(&source)
 	b.Bot().Send(m.Chat, "Add Feed \""+source.Title+"\" Success")
+
+}
+func (b *bot) cmdUnSub(m *telebot.Message) {
+	b.app.Logger().Infof("Recieved /unsub commmand from user: \"%s\"", m.Sender.Username)
+	var user models.User
+	b.app.DB().Model(&user).First(&user).Where("telegram_id = ?", m.Chat.ID)
+	if m.IsReply() {
+		err := b.memdb.View(func(tx *buntdb.Tx) error {
+			val, ok := tx.Get(strconv.Itoa(m.ReplyTo.ID))
+			sourceID, err := strconv.Atoi(val)
+			if err != nil {
+				b.app.Logger().Panicf("Unexpected string to interger convertion error: %s", err.Error())
+			}
+			var source models.Source
+			source.ID = uint(sourceID)
+			b.app.DB().Model(source).Association("Users")
+			b.app.DB().Model(source).Association("Users").Delete(user)
+			return ok
+		})
+		if err != nil {
+			b.app.Logger().Errorf("Memory DB error: %s", err.Error())
+			b.Bot().Send(m.Chat, "Database error")
+		}
+	} else {
+		sourceID, err := strconv.Atoi(m.Payload)
+		if err != nil {
+			b.app.Logger().Infof("/unsub command received illegal input: %s", m.Payload)
+			b.Bot().Send(m.Chat, "source ID illegal")
+			return
+		}
+		var source models.Source
+		source.ID = uint(sourceID)
+		b.app.DB().Model(source).Association("Users")
+		if err = b.app.DB().Model(source).Association("Users").Delete(user); err != nil {
+			b.app.Logger().Errorf("Database error: %s", err.Error())
+			b.Bot().Send(m.Chat, "Database error")
+			return
+		}
+
+	}
+	b.Bot().Send(m.Chat, "Subscription deleted if exist.")
 
 }

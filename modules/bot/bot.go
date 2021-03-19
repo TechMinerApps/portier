@@ -1,11 +1,13 @@
 package bot
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/TechMinerApps/portier/modules/feed"
 	"github.com/TechMinerApps/portier/modules/log"
+	"github.com/tidwall/buntdb"
 	"gopkg.in/tucnak/telebot.v2"
 	"gorm.io/gorm"
 )
@@ -13,6 +15,7 @@ import (
 // Config is a config bot used
 type Config struct {
 	Token string
+	MemDB *buntdb.DB
 }
 
 // Bot is the control interface provided to portier main instance
@@ -36,16 +39,21 @@ type Portier interface {
 }
 
 type bot struct {
-	app Portier
-	bot *telebot.Bot
+	app   Portier
+	bot   *telebot.Bot
+	memdb *buntdb.DB
 }
 
 // NewBot create a bot according to config
 func NewBot(c *Config, app Portier) (Bot, error) {
+	if c.MemDB == nil {
+		return nil, errors.New("memory db is nil, maybe not initialized")
+	}
 	var err error
 	b := &bot{
-		app: app,
-		bot: &telebot.Bot{},
+		app:   app,
+		bot:   &telebot.Bot{},
+		memdb: c.MemDB,
 	}
 	b.bot, err = telebot.NewBot(telebot.Settings{
 		URL:         "",
@@ -81,4 +89,5 @@ func (b *bot) Bot() *telebot.Bot {
 func (b *bot) configCommands() {
 	b.bot.Handle("/start", b.cmdStart)
 	b.bot.Handle("/sub", b.cmdSub)
+	b.bot.Handle("/unsub", b.cmdUnSub)
 }
