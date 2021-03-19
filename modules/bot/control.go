@@ -13,5 +13,5 @@ func (b *bot) cmdStart(m *telebot.Message) {
 		b.app.Logger().Errorf("Database error: %s", err.Error())
 	}
 	b.app.Logger().Infof("New user \"%s\" registered into database with ID: %d", m.Sender.Username, m.Chat.ID)
-	b.Bot().Send(m.Chat, "Welcome to portier")
+	b.Bot().Send(m.Chat, "Welcome to portier\nuse /help to check usage")
 }

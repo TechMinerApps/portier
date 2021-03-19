@@ -91,4 +91,5 @@ func (b *bot) configCommands() {
 	b.bot.Handle("/sub", b.cmdSub)
 	b.bot.Handle("/unsub", b.cmdUnSub)
 	b.bot.Handle("/list", b.cmdList)
+	b.bot.Handle("/help", b.cmdHelp)
 }
