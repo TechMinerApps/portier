@@ -12,6 +12,7 @@ import (
 )
 
 func (b *bot) cmdSub(m *telebot.Message) {
+	b.app.Logger().Infof("Recieved /sub commmand from user: \"%s\"", m.Sender.Username)
 	var source models.Source
 	source.URL, _ = GetURLAndMentionFromMessage(m)
 	source.Title, _ = b.app.Poller().FetchTitle(source.URL)
@@ -36,6 +37,7 @@ func (b *bot) cmdSub(m *telebot.Message) {
 	b.app.DB().Model(&user).Association("Sources").Append(&source)
 
 	b.app.Poller().AddSource(&source)
+	b.app.Logger().Infof("Add feed \"%s\" to user \"%s\" success", source.Title, m.Sender.Username)
 	b.Bot().Send(m.Chat, "Add Feed \""+source.Title+"\" Success")
 
 }
@@ -78,5 +80,28 @@ func (b *bot) cmdUnSub(m *telebot.Message) {
 
 	}
 	b.Bot().Send(m.Chat, "Subscription deleted if exist.")
+
+}
+
+func (b *bot) cmdList(m *telebot.Message) {
+	b.app.Logger().Infof("Recieved /list commmand from user: \"%s\"", m.Sender.Username)
+	var user models.User
+	if err := b.app.DB().Model(user).First(&user).Where("telegram_id = ?", m.Chat.ID).Error; err != nil {
+		b.app.Logger().Errorf("Database error: %s", err.Error())
+		b.Bot().Send(m.Chat, "Database error")
+		return
+	}
+	var sources []models.Source
+	b.app.DB().Model(user).Association("Sources")
+	b.app.DB().Model(user).Association("Sources").Find(&sources)
+	var message string
+	if len(sources) == 0 {
+		b.bot.Send(m.Chat, "No subscription")
+		return
+	}
+	for _, s := range sources {
+		message = message + "[" + strconv.Itoa(int(s.ID)) + "]: " + s.Title + "\n"
+	}
+	b.bot.Send(m.Chat, message)
 
 }
