@@ -97,14 +97,6 @@ func (b *broadcaster) Start() {
 				b.Logger.Debugf("Broadcasting feed item %s", item.Item.Title)
 				b.broadcast(item)
 
-				// Then store it in db
-				err := b.MemDB.Update(func(tx *buntdb.Tx) error {
-					_, _, err := tx.Set(item.FeedID, "exists", nil)
-					return err
-				})
-				if err != nil {
-					b.Logger.Errorf("Memory DB insertion error: %s", err.Error())
-				}
 			}
 		}()
 	}

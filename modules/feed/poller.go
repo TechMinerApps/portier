@@ -182,7 +182,14 @@ func (p *poller) poll(s *models.Source) {
 		p.logger.Infof("Sending feed item from %s to broadcaster", s.Title)
 		p.feedChannel <- &feed
 
-		// Store feed item into memdb is done by broadcaster
+		// Then store it in db
+		err := p.db.Update(func(tx *buntdb.Tx) error {
+			_, _, err := tx.Set(hash, "exists", nil)
+			return err
+		})
+		if err != nil {
+			p.logger.Errorf("Memory DB insertion error: %s", err.Error())
+		}
 	}
 }
 
