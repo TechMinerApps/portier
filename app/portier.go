@@ -198,19 +198,13 @@ func (p *Portier) setupFeedComponent() {
 	// Broadcaster rely on bot to broadcast
 	broadcasterConfig := &feed.BroadCastConfig{
 		DB:          p.db,
+		MemDB:       p.memDB,
 		WorkerCount: 1,
 		FeedChannel: feedChan,
 		Bot:         p.bot.Bot(),
 		Logger:      p.logger,
 		Template:    p.config.Template,
-		Telegraph: &telegraph.Config{
-			AccountNumber: p.config.Telegraph.Account,
-			ShortName:     p.config.Telegraph.ShortName,
-			AuthorName:    p.config.Telegraph.Author,
-			AuthorURL:     p.config.Telegraph.AuthorURL,
-			AccessToken:   []string{},
-			Logger:        p.logger,
-		},
+		Telegraph:   &telegraph.Config{AccountNumber: p.config.Telegraph.Account, ShortName: p.config.Telegraph.ShortName, AuthorName: p.config.Telegraph.Author, AuthorURL: p.config.Telegraph.AuthorURL, AccessToken: []string{}, Logger: p.logger},
 	}
 	p.broadcaster, err = feed.NewBroadcaster(broadcasterConfig)
 	if err != nil {
@@ -267,11 +261,14 @@ func (p *Portier) setupViper() {
 	}
 }
 
-func (p *Portier) setupBot() error {
+func (p *Portier) setupBot() {
 	var err error
-	p.bot, err = bot.NewBot(&p.config.Telegram, p)
-	if err != nil {
-		return err
+	cfg := bot.Config{
+		Token: p.config.Telegram.Token,
+		MemDB: p.memDB,
 	}
-	return nil
+	p.bot, err = bot.NewBot(&cfg, p)
+	if err != nil {
+		p.logger.Fatalf("Bot setup failed: %s", err.Error())
+	}
 }

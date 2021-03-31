@@ -1,6 +1,7 @@
 package feed
 
 import (
+	"sync"
 	"time"
 
 	"github.com/TechMinerApps/portier/models"
@@ -23,10 +24,20 @@ type Poller interface {
 type poller struct {
 	parser      *gofeed.Parser
 	db          *buntdb.DB
-	sourcePool  []*models.Source
-	workerPool  map[uint]worker
+	sources     sources
+	workers     workers
 	feedChannel chan<- *models.Feed
 	logger      log.Logger
+}
+
+type sources struct {
+	Pool []*models.Source
+	Lock sync.Mutex
+}
+
+type workers struct {
+	Pool map[uint]worker
+	Lock sync.Mutex
 }
 
 type worker struct {
@@ -45,8 +56,11 @@ type PollerConfig struct {
 func (p *poller) Start() error {
 	// db instance should already have all the info when poller started
 
+	// Protect source Pool
+	p.sources.Lock.Lock()
+	defer p.sources.Lock.Unlock()
 	// Start worker goroutine
-	for _, s := range p.sourcePool {
+	for _, s := range p.sources.Pool {
 		go p.worker(s)
 		p.logger.Infof("Started poller for %s", s.Title)
 	}
@@ -55,30 +69,50 @@ func (p *poller) Start() error {
 
 func (p *poller) Stop() error {
 	// poller.Stop() does not take care of data persistence
-	for _, worker := range p.workerPool {
+
+	// Use lock to protect worker pool
+	p.workers.Lock.Lock()
+	defer p.workers.Lock.Unlock()
+	for key, worker := range p.workers.Pool {
 		worker.ticker.Stop()
+		delete(p.workers.Pool, key)
 	}
+
+	// We send feed into this channel
+	// so is responsible for closing it
 	close(p.feedChannel)
 	return nil
 }
 
 func (p *poller) AddSource(s *models.Source) error {
-	p.sourcePool = append(p.sourcePool, s)
+	// Protect source Pool
+	p.sources.Lock.Lock()
+	defer p.sources.Lock.Unlock()
+	p.sources.Pool = append(p.sources.Pool, s)
 	go p.worker(s)
 	return nil
 }
 
 func (p *poller) RemoveSource(s *models.Source) error {
-	p.workerPool[s.ID].ticker.Stop()
+	p.workers.Pool[s.ID].ticker.Stop()
 	return nil
 }
 
 func (p *poller) UpdateSource(s *models.Source) error {
-	if p.sourcePool[s.ID].UpdateInterval <= s.UpdateInterval {
+	if p.sources.Pool[s.ID].UpdateInterval <= s.UpdateInterval {
 		return nil
 	}
-	p.workerPool[s.ID].ticker.Stop()
-	p.sourcePool[s.ID] = s
+
+	// Stop current worker
+	p.workers.Lock.Lock()
+	p.workers.Pool[s.ID].ticker.Stop()
+	delete(p.workers.Pool, s.ID)
+	p.workers.Lock.Unlock()
+
+	// Add new worker
+	p.sources.Lock.Lock()
+	p.sources.Pool[s.ID] = s
+	p.sources.Lock.Unlock()
 	go p.worker(s)
 	return nil
 }
@@ -92,18 +126,25 @@ func (p *poller) FetchTitle(url string) (string, error) {
 }
 
 func (p *poller) worker(s *models.Source) {
-	// worker is a blocking function
-	// that create a create a worker object in p.workerPool
+	// worker() is a blocking function
+	// that create a create a worker object in p.workers.Pool
 	// make sure to call it in a new go routine
+	// worker() acquire worker lock, so don't acquire it in upper function
 	ticker := time.NewTicker(time.Duration(s.UpdateInterval * uint(time.Second)))
+	//ticker := time.NewTicker(time.Second)
 	var w worker
 	w.ticker = ticker
+
+	// Copy source here
 	w.source = *s
-	p.workerPool[s.ID] = w
-	for {
+	p.workers.Lock.Lock()
+	p.workers.Pool[s.ID] = w
+	p.workers.Lock.Unlock()
+
+	// Stop blocking when ticker stops
+	for range ticker.C {
 		p.logger.Infof("Polling source %s", w.source.Title)
 		go p.poll(&w.source)
-		<-ticker.C
 	}
 
 }
@@ -142,21 +183,24 @@ func (p *poller) poll(s *models.Source) {
 		p.feedChannel <- &feed
 
 		// Then store it in db
-		err = p.db.Update(func(tx *buntdb.Tx) error {
+		err := p.db.Update(func(tx *buntdb.Tx) error {
 			_, _, err := tx.Set(hash, "exists", nil)
 			return err
 		})
+		if err != nil {
+			p.logger.Errorf("Memory DB insertion error: %s", err.Error())
+		}
 	}
 }
 
 // NewPoller creates a Poller according to the Config
 func NewPoller(c *PollerConfig) (Poller, error) {
 	var p poller
-	p.workerPool = make(map[uint]worker)
+	p.workers.Pool = make(map[uint]worker)
 	p.db = c.DB
 	p.feedChannel = c.FeedChannel
 	p.logger = c.Logger
-	p.sourcePool = c.SourcePool
+	p.sources.Pool = c.SourcePool
 	p.parser = gofeed.NewParser()
 	return &p, nil
 }

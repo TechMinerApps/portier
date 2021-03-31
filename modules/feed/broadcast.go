@@ -1,12 +1,14 @@
 package feed
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/TechMinerApps/portier/models"
 	"github.com/TechMinerApps/portier/modules/log"
 	"github.com/TechMinerApps/portier/modules/render"
 	"github.com/TechMinerApps/portier/modules/telegraph"
+	"github.com/tidwall/buntdb"
 	"gopkg.in/tucnak/telebot.v2"
 	"gorm.io/gorm"
 )
@@ -22,6 +24,9 @@ type BroadCastConfig struct {
 
 	// DB is used to query users to broadcast
 	DB *gorm.DB
+
+	// MemDB is used to store chat id
+	MemDB *buntdb.DB
 
 	// WorkerCount is used in concurrent broadcast
 	WorkerCount int
@@ -59,6 +64,10 @@ func (t *tgRecipient) Recipient() string {
 
 // NewBroadcaster generates new Broadcaster instance from config
 func NewBroadcaster(c *BroadCastConfig) (BroadCaster, error) {
+	if c.DB == nil ||
+		c.MemDB == nil {
+		return nil, errors.New("broadcaster config error")
+	}
 	b := &broadcaster{
 		BroadCastConfig: *c,
 	}
@@ -87,6 +96,7 @@ func (b *broadcaster) Start() {
 			for item := range b.FeedChannel {
 				b.Logger.Debugf("Broadcasting feed item %s", item.Item.Title)
 				b.broadcast(item)
+
 			}
 		}()
 	}
@@ -137,8 +147,19 @@ func (b *broadcaster) send(telegramID int64, item *models.Feed) {
 	}
 
 	// Send via bot
-	_, err = b.Bot.Send(&tgRecipient{ID: telegramID}, message, options)
+	m, err := b.Bot.Send(&tgRecipient{ID: telegramID}, message, options)
 	if err != nil {
 		b.Logger.Errorf("Error sending message: %s\n Message is: %s", err.Error(), message)
 	}
+
+	// Store the message ID into DB
+	// For /unsub to use
+	err = b.MemDB.Update(func(tx *buntdb.Tx) error {
+		_, _, err := tx.Set(strconv.Itoa(m.ID), strconv.Itoa(int(item.SourceID)), nil)
+		return err
+	})
+	if err != nil {
+		b.Logger.Errorf("Memory DB insertion error: %s", err.Error())
+	}
+
 }
