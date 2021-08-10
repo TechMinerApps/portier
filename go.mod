@@ -23,8 +23,7 @@ require (
 	github.com/spf13/viper v1.7.1
 	github.com/tidwall/buntdb v1.2.3
 	github.com/valyala/fasthttp v1.23.0 // indirect
-	go.uber.org/multierr v1.6.0 // indirect
-	go.uber.org/zap v1.16.0
+	go.uber.org/zap v1.19.0
 	golang.org/x/net v0.0.0-20210410081132-afb366fc7cd1 // indirect
 	golang.org/x/sys v0.0.0-20210403161142-5e06dd20ab57 // indirect
 	gopkg.in/ini.v1 v1.62.0 // indirect
