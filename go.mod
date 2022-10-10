@@ -29,7 +29,7 @@ require (
 	gopkg.in/ini.v1 v1.62.0 // indirect
 	gopkg.in/tucnak/telebot.v2 v2.3.5
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gorm.io/driver/mysql v1.0.5
+	gorm.io/driver/mysql v1.4.1
 	gorm.io/driver/sqlite v1.1.4
-	gorm.io/gorm v1.21.7
+	gorm.io/gorm v1.23.8
 )
